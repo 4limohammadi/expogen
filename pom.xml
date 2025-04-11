@@ -7,7 +7,7 @@
   <packaging>jar</packaging>
 
   <name>Expogen</name>
-  <description>Excel pro generator, An annotation processor to generate Excel exporters</description>
+  <description>Excel pro generator, An annotation processor to generate Excel exporters service</description>
   <url>http://maven.apache.org</url>
 
   <properties>
@@ -17,7 +17,6 @@
   </properties>
 
   <dependencies>
-    <!-- Apache POI برای کار با اکسل -->
     <dependency>
       <groupId>org.apache.poi</groupId>
       <artifactId>poi</artifactId>
@@ -28,7 +27,6 @@
       <artifactId>poi-ooxml</artifactId>
       <version>5.2.5</version>
     </dependency>
-    <!-- جاوا برای پردازش انوتیشن‌ها -->
     <dependency>
       <groupId>javax.annotation</groupId>
       <artifactId>javax.annotation-api</artifactId>
@@ -58,7 +56,6 @@
           <proc>none</proc>
         </configuration>
       </plugin>
-      <!-- پلاگین برای تولید سورس‌کد -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-source-plugin</artifactId>
@@ -72,7 +69,6 @@
           </execution>
         </executions>
       </plugin>
-      <!-- پلاگین برای تولید جاواداک -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
