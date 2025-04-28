@@ -1,14 +1,31 @@
 package ir.byteplus.expogen;
 
-import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+/**
+ * Specifies an Excel formula to be applied to a column or cell in the generated Excel file.
+ * Used within {@link ColumnDefinition} to add computational logic.
+ */
 @Retention(RetentionPolicy.SOURCE)
 @Target({})
 public @interface ExcelFormula {
-    String formula() default ""; // فرمول اکسل (مثلاً "SUM(A2:A10)")
-    String applyTo() default "COLUMN"; // فرمول برای کل ستون اعمال بشه ("COLUMN") یا فقط یه سلول خاص ("CELL")
-    int rowOffset() default -1; // اگه applyTo=CELL باشه، فرمول توی کدوم ردیف اعمال بشه (-1 یعنی آخرین ردیف)
+    /**
+     * The Excel formula to apply (e.g., "SUM", "AVERAGE"). Does not include the range; range is added dynamically.
+     * @return the formula name
+     */
+    String formula() default "";
+
+    /**
+     * Specifies where the formula should be applied: "COLUMN" for the entire column or "CELL" for a specific row.
+     * @return "COLUMN" or "CELL"
+     */
+    String applyTo() default "COLUMN";
+
+    /**
+     * The row offset where the formula should be applied if applyTo is "CELL". Use -1 for the last row.
+     * @return the row offset
+     */
+    int rowOffset() default -1;
 }

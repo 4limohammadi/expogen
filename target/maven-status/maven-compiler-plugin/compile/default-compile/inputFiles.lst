@@ -2,6 +2,7 @@
 /home/ali/dev/workspase/java/expogen/src/main/java/ir/byteplus/expogen/ExportToExcelService.java
 /home/ali/dev/workspase/java/expogen/src/main/java/ir/byteplus/expogen/ExcelFormula.java
 /home/ali/dev/workspase/java/expogen/src/main/java/ir/byteplus/expogen/ExportToExcels.java
+/home/ali/dev/workspase/java/expogen/src/main/java/ir/byteplus/expogen/ColumnType.java
 /home/ali/dev/workspase/java/expogen/src/main/java/ir/byteplus/expogen/ExcelProcessor.java
 /home/ali/dev/workspase/java/expogen/src/main/java/ir/byteplus/expogen/ExcelStyle.java
 /home/ali/dev/workspase/java/expogen/src/main/java/ir/byteplus/expogen/ColumnDefinition.java
