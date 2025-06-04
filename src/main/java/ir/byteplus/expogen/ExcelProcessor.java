@@ -84,13 +84,13 @@ public class ExcelProcessor extends AbstractProcessor {
         try (PrintWriter out = new PrintWriter(file.openWriter())) {
             writePackageAndImports(out, packageName);
             writeClassDeclaration(out, className, classElement);
+            writeFields(out);
             writeExportMethod(out, classElement, sheetName, columns);
             writeExportMethodFromStream(out, classElement, sheetName, columns);
             writeHelperMethods(out);
             out.println("}");
         }
     }
-
 
     /**
      * Writes the package declaration and import statements to the output.
@@ -127,7 +127,24 @@ public class ExcelProcessor extends AbstractProcessor {
     }
 
     /**
-     * Writes the export method that generates an Excel workbook from the provided data.
+     * Writes the instance fields for the generated exporter class.
+     *
+     * @param out the writer for the generated source file
+     */
+    private void writeFields(PrintWriter out) {
+        out.println("    private SXSSFWorkbook workbook;");
+        out.println("    private SXSSFSheet sheet;");
+        out.println("    private SimpleDateFormat dateFormat;");
+        out.println("    private CellStyle[] headerStyles;");
+        out.println("    private CellStyle[] bodyStyles;");
+        out.println("    private String[] formulas;");
+        out.println("    private String[] formulaApplyTo;");
+        out.println("    private int[] formulaRowOffsets;");
+        out.println();
+    }
+
+    /**
+     * Writes the export method that generates an Excel workbook from a list of data.
      *
      * @param out the writer for the generated source file
      * @param classElement the annotated class element
@@ -137,8 +154,9 @@ public class ExcelProcessor extends AbstractProcessor {
     private void writeExportMethod(PrintWriter out, TypeElement classElement, String sheetName, ColumnDefinition[] columns) {
         out.println("    @Override");
         out.println("    public SXSSFWorkbook export(List<" + classElement.getSimpleName() + "> data) {");
-        out.println("        SXSSFWorkbook workbook = new SXSSFWorkbook(100);");
-        out.println("        SXSSFSheet sheet = workbook.createSheet(\"" + sheetName + "\");");
+        out.println("        workbook = new SXSSFWorkbook(100);");
+        out.println("        sheet = workbook.createSheet(\"" + sheetName + "\");");
+        out.println("        dateFormat = new SimpleDateFormat(\"dd/MM/yyyy\");");
         out.println();
 
         List<ColumnDefinition> sortedColumns = Arrays.stream(columns)
@@ -156,11 +174,10 @@ public class ExcelProcessor extends AbstractProcessor {
             out.println("        headerCell" + i + ".setCellStyle(headerStyles[" + i + "]);");
         }
 
-        out.println("        SimpleDateFormat dateFormat = new SimpleDateFormat(\"dd/MM/yyyy\");");
         out.println("        int rowNum = 1;");
         out.println("        int dataRowStart = 2;");
-        out.println("        if (data != null && !data.isEmpty()) {");// need to handle stream not null
-        out.println("            for (" + classElement.getSimpleName() + " item : data) {"); //need to iterate over stream
+        out.println("        if (data != null && !data.isEmpty()) {");
+        out.println("            for (" + classElement.getSimpleName() + " item : data) {");
         out.println("                Row row = sheet.createRow(rowNum++);");
         for (int i = 0; i < sortedColumns.size(); i++) {
             ColumnDefinition col = sortedColumns.get(i);
@@ -196,12 +213,10 @@ public class ExcelProcessor extends AbstractProcessor {
         out.println("        }");
         out.println("        int lastDataRow = data != null && !data.isEmpty() ? rowNum - 1 : 1;");
 
-        writeFormulas(out, sortedColumns);
+//        writeFormulas(out, sortedColumns);
 
         for (int i = 0; i < sortedColumns.size(); i++) {
             out.println("        sheet.trackColumnForAutoSizing(" + i + ");");
-        }
-        for (int i = 0; i < sortedColumns.size(); i++) {
             out.println("        sheet.autoSizeColumn(" + i + ");");
         }
 
@@ -209,11 +224,20 @@ public class ExcelProcessor extends AbstractProcessor {
         out.println("    }");
     }
 
-    private void writeExportMethodFromStream(PrintWriter out, TypeElement classElement, String sheetName, ColumnDefinition[] columns){
+    /**
+     * Writes the export method that generates an Excel workbook from a stream of data.
+     *
+     * @param out the writer for the generated source file
+     * @param classElement the annotated class element
+     * @param sheetName the name of the Excel sheet
+     * @param columns the column definitions for the Excel sheet
+     */
+    private void writeExportMethodFromStream(PrintWriter out, TypeElement classElement, String sheetName, ColumnDefinition[] columns) {
         out.println("    @Override");
         out.println("    public SXSSFWorkbook export(Stream<" + classElement.getSimpleName() + "> dataStream) {");
-        out.println("        SXSSFWorkbook workbook = new SXSSFWorkbook(100);");
-        out.println("        SXSSFSheet sheet = workbook.createSheet(\"" + sheetName + "\");");
+        out.println("        workbook = new SXSSFWorkbook(100);");
+        out.println("        sheet = workbook.createSheet(\"" + sheetName + "\");");
+        out.println("        dateFormat = new SimpleDateFormat(\"dd/MM/yyyy\");");
         out.println();
 
         List<ColumnDefinition> sortedColumns = Arrays.stream(columns)
@@ -231,12 +255,12 @@ public class ExcelProcessor extends AbstractProcessor {
             out.println("        headerCell" + i + ".setCellStyle(headerStyles[" + i + "]);");
         }
 
-        out.println("        SimpleDateFormat dateFormat = new SimpleDateFormat(\"dd/MM/yyyy\");");
         out.println("        AtomicInteger rowNum = new AtomicInteger(1);");
         out.println("        int dataRowStart = 2;");
-//        out.println("        if (dataStream != null && dataStream.count()!=0) {");// need to handle stream not null
-//        out.println("            for (" + classElement.getSimpleName() + " item : data) {"); //need to iterate over stream
-        out.println("            dataStream.forEach(item->{");
+        out.println("        long[] rowCount = new long[1];"); // Track rows processed
+        out.println("        if (dataStream != null) {");
+        out.println("            dataStream.forEach(item -> {");
+        out.println("                rowCount[0]++;");
         out.println("                Row row = sheet.createRow(rowNum.getAndIncrement());");
         for (int i = 0; i < sortedColumns.size(); i++) {
             ColumnDefinition col = sortedColumns.get(i);
@@ -269,15 +293,13 @@ public class ExcelProcessor extends AbstractProcessor {
             out.println("                cell" + i + ".setCellStyle(bodyStyles[" + i + "]);");
         }
         out.println("            });");
-//        out.println("        }");
-//        out.println("        int lastDataRow = (dataStream != null && dataStream.count()!=0) ? (int)dataStream.count() - 1 : 1;");
+        out.println("        }");
+        out.println("        int lastDataRow = rowCount[0] > 0 ? (int) rowCount[0] + 1 : 1;");
 
-//        writeFormulasStream(out, sortedColumns);
+//        writeFormulas(out, sortedColumns); // Use same formula logic for both List and Stream
 
         for (int i = 0; i < sortedColumns.size(); i++) {
             out.println("        sheet.trackColumnForAutoSizing(" + i + ");");
-        }
-        for (int i = 0; i < sortedColumns.size(); i++) {
             out.println("        sheet.autoSizeColumn(" + i + ");");
         }
 
@@ -315,11 +337,11 @@ public class ExcelProcessor extends AbstractProcessor {
      * @param columns the list of column definitions
      */
     private void writeStyles(PrintWriter out, List<ColumnDefinition> columns) {
-        out.println("        CellStyle[] headerStyles = new CellStyle[" + columns.size() + "];");
-        out.println("        CellStyle[] bodyStyles = new CellStyle[" + columns.size() + "];");
-        out.println("        String[] formulas = new String[" + columns.size() + "];");
-        out.println("        String[] formulaApplyTo = new String[" + columns.size() + "];");
-        out.println("        int[] formulaRowOffsets = new int[" + columns.size() + "];");
+        out.println("        headerStyles = new CellStyle[" + columns.size() + "];");
+        out.println("        bodyStyles = new CellStyle[" + columns.size() + "];");
+        out.println("        formulas = new String[" + columns.size() + "];");
+        out.println("        formulaApplyTo = new String[" + columns.size() + "];");
+        out.println("        formulaRowOffsets = new int[" + columns.size() + "];");
 
         for (int i = 0; i < columns.size(); i++) {
             ColumnDefinition col = columns.get(i);
@@ -366,60 +388,37 @@ public class ExcelProcessor extends AbstractProcessor {
             }
         }
     }
+
     /**
      * Writes the formulas for the Excel sheet based on column definitions.
      *
      * @param out the writer for the generated source file
      * @param columns the list of column definitions
      */
-    private void writeFormulas(PrintWriter out, List<ColumnDefinition> columns) {
-        out.println("        int formulaRowNum = lastDataRow + 1;");
-        out.println("        if (data != null && !data.isEmpty()) {");
-        for (int i = 0; i < columns.size(); i++) {
-            out.println("            if (!formulas[" + i + "].isEmpty()) {");
-            out.println("                Row formulaRow = sheet.createRow(formulaRowNum);");
-            out.println("                Cell formulaCell = formulaRow.createCell(" + i + ");");
-            out.println("                String formula = \"\";");
-            out.println("                if (formulaApplyTo[" + i + "].equals(\"COLUMN\")) {");
-            out.println("                    String range = getColumnLetter(" + i + ") + \"2:\" + getColumnLetter(" + i + ") + lastDataRow;");
-            out.println("                    formula = formulas[" + i + "] + \"(\" + range + \")\";");
-            out.println("                    formulaCell.setCellFormula(formula);");
-            out.println("                } else if (formulaApplyTo[" + i + "].equals(\"CELL\")) {");
-            out.println("                    int targetRow = formulaRowOffsets[" + i + "] == -1 ? formulaRowNum : formulaRowOffsets[" + i + "];");
-            out.println("                    Row targetFormulaRow = sheet.createRow(targetRow);");
-            out.println("                    formulaCell = targetFormulaRow.createCell(" + i + ");");
-            out.println("                    formula = formulas[" + i + "];");
-            out.println("                    formulaCell.setCellFormula(formula);");
-            out.println("                }");
-            out.println("                formulaCell.setCellStyle(bodyStyles[" + i + "]);");
-            out.println("            }");
-        }
-        out.println("        }");
-    }
-    private void writeFormulasStream(PrintWriter out, List<ColumnDefinition> columns) {
-        out.println("        int formulaRowNum = lastDataRow + 1;");
-        out.println("        if (dataStream != null && dataStream.count() > 0) {");
-        for (int i = 0; i < columns.size(); i++) {
-            out.println("            if (!formulas[" + i + "].isEmpty()) {");
-            out.println("                Row formulaRow = sheet.createRow(formulaRowNum);");
-            out.println("                Cell formulaCell = formulaRow.createCell(" + i + ");");
-            out.println("                String formula = \"\";");
-            out.println("                if (formulaApplyTo[" + i + "].equals(\"COLUMN\")) {");
-            out.println("                    String range = getColumnLetter(" + i + ") + \"2:\" + getColumnLetter(" + i + ") + lastDataRow;");
-            out.println("                    formula = formulas[" + i + "] + \"(\" + range + \")\";");
-            out.println("                    formulaCell.setCellFormula(formula);");
-            out.println("                } else if (formulaApplyTo[" + i + "].equals(\"CELL\")) {");
-            out.println("                    int targetRow = formulaRowOffsets[" + i + "] == -1 ? formulaRowNum : formulaRowOffsets[" + i + "];");
-            out.println("                    Row targetFormulaRow = sheet.createRow(targetRow);");
-            out.println("                    formulaCell = targetFormulaRow.createCell(" + i + ");");
-            out.println("                    formula = formulas[" + i + "];");
-            out.println("                    formulaCell.setCellFormula(formula);");
-            out.println("                }");
-            out.println("                formulaCell.setCellStyle(bodyStyles[" + i + "]);");
-            out.println("            }");
-        }
-        out.println("        }");
-    }
+//    private void writeFormulas(PrintWriter out, List<ColumnDefinition> columns) {
+//        out.println("        int formulaRowNum = lastDataRow + 1;");
+//        out.println("        if (lastDataRow > 1) {"); // Only apply formulas if data exists
+//        for (int i = 0; i < columns.size(); i++) {
+//            out.println("            if (!formulas[" + i + "].isEmpty()) {");
+//            out.println("                Row formulaRow = sheet.createRow(formulaRowNum);");
+//            out.println("                Cell formulaCell = formulaRow.createCell(" + i + ");");
+//            out.println("                String formula = \"\";");
+//            out.println("                if (formulaApplyTo[" + i + "].equals(\"COLUMN\")) {");
+//            out.println("                    String range = getColumnLetter(" + i + ") + \"2:\" + getColumnLetter(" + i + ") + lastDataRow;");
+//            out.println("                    formula = formulas[" + i + "] + \"(\" + range + \")\";");
+//            out.println("                    formulaCell.setCellFormula(formula);");
+//            out.println("                } else if (formulaApplyTo[" + i + "].equals(\"CELL\")) {");
+//            out.println("                    int targetRow = formulaRowOffsets[" + i + "] == -1 ? formulaRowNum : formulaRowOffsets[" + i + "];");
+//            out.println("                    Row targetFormulaRow = sheet.createRow(targetRow);");
+//            out.println("                    formulaCell = targetFormulaRow.createCell(" + i + ");");
+//            out.println("                    formula = formulas[" + i + "];");
+//            out.println("                    formulaCell.setCellFormula(formula);");
+//            out.println("                }");
+//            out.println("                formulaCell.setCellStyle(bodyStyles[" + i + "]);");
+//            out.println("            }");
+//        }
+//        out.println("        }");
+//    }
 
     /**
      * Writes helper methods for the generated class, such as column letter conversion.
