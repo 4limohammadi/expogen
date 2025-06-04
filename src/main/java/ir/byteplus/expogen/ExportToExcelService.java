@@ -3,6 +3,7 @@ package ir.byteplus.expogen;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Defines the contract for classes that export data to an Excel SXSSFWorkbook.
@@ -18,4 +19,12 @@ public interface ExportToExcelService<T> {
      * @return the generated Excel SXSSFWorkbook
      */
     SXSSFWorkbook export(List<T> data);
+
+    /**
+     * Exports a stream of data objects to an Excel SXSSFWorkbook.
+     *
+     * @param dataStream the stream of objects to export
+     * @return the generated Excel SXSSFWorkbook
+     */
+    SXSSFWorkbook export(Stream<T> dataStream);
 }

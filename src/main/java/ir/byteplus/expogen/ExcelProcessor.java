@@ -85,6 +85,7 @@ public class ExcelProcessor extends AbstractProcessor {
             writePackageAndImports(out, packageName);
             writeClassDeclaration(out, className, classElement);
             writeExportMethod(out, classElement, sheetName, columns);
+            writeExportMethodFromStream(out, classElement, sheetName, columns);
             writeHelperMethods(out);
             out.println("}");
         }
@@ -109,6 +110,8 @@ public class ExcelProcessor extends AbstractProcessor {
         out.println("import java.util.List;");
         out.println("import java.util.Date;");
         out.println("import java.text.SimpleDateFormat;");
+        out.println("import java.util.stream.Stream;");
+        out.println("import java.util.concurrent.atomic.AtomicInteger;");
         out.println();
     }
 
@@ -156,8 +159,8 @@ public class ExcelProcessor extends AbstractProcessor {
         out.println("        SimpleDateFormat dateFormat = new SimpleDateFormat(\"dd/MM/yyyy\");");
         out.println("        int rowNum = 1;");
         out.println("        int dataRowStart = 2;");
-        out.println("        if (data != null && !data.isEmpty()) {");
-        out.println("            for (" + classElement.getSimpleName() + " item : data) {");
+        out.println("        if (data != null && !data.isEmpty()) {");// need to handle stream not null
+        out.println("            for (" + classElement.getSimpleName() + " item : data) {"); //need to iterate over stream
         out.println("                Row row = sheet.createRow(rowNum++);");
         for (int i = 0; i < sortedColumns.size(); i++) {
             ColumnDefinition col = sortedColumns.get(i);
@@ -194,6 +197,82 @@ public class ExcelProcessor extends AbstractProcessor {
         out.println("        int lastDataRow = data != null && !data.isEmpty() ? rowNum - 1 : 1;");
 
         writeFormulas(out, sortedColumns);
+
+        for (int i = 0; i < sortedColumns.size(); i++) {
+            out.println("        sheet.trackColumnForAutoSizing(" + i + ");");
+        }
+        for (int i = 0; i < sortedColumns.size(); i++) {
+            out.println("        sheet.autoSizeColumn(" + i + ");");
+        }
+
+        out.println("        return workbook;");
+        out.println("    }");
+    }
+
+    private void writeExportMethodFromStream(PrintWriter out, TypeElement classElement, String sheetName, ColumnDefinition[] columns){
+        out.println("    @Override");
+        out.println("    public SXSSFWorkbook export(Stream<" + classElement.getSimpleName() + "> dataStream) {");
+        out.println("        SXSSFWorkbook workbook = new SXSSFWorkbook(100);");
+        out.println("        SXSSFSheet sheet = workbook.createSheet(\"" + sheetName + "\");");
+        out.println();
+
+        List<ColumnDefinition> sortedColumns = Arrays.stream(columns)
+                .sorted(Comparator.comparingInt(ColumnDefinition::order))
+                .collect(Collectors.toList());
+
+        writeStyles(out, sortedColumns);
+
+        out.println("        Row headerRow = sheet.createRow(0);");
+        for (int i = 0; i < sortedColumns.size(); i++) {
+            ColumnDefinition col = sortedColumns.get(i);
+            String colName = col.columnName().isEmpty() ? col.fieldName() : col.columnName();
+            out.println("        Cell headerCell" + i + " = headerRow.createCell(" + i + ");");
+            out.println("        headerCell" + i + ".setCellValue(\"" + colName + "\");");
+            out.println("        headerCell" + i + ".setCellStyle(headerStyles[" + i + "]);");
+        }
+
+        out.println("        SimpleDateFormat dateFormat = new SimpleDateFormat(\"dd/MM/yyyy\");");
+        out.println("        AtomicInteger rowNum = new AtomicInteger(1);");
+        out.println("        int dataRowStart = 2;");
+//        out.println("        if (dataStream != null && dataStream.count()!=0) {");// need to handle stream not null
+//        out.println("            for (" + classElement.getSimpleName() + " item : data) {"); //need to iterate over stream
+        out.println("            dataStream.forEach(item->{");
+        out.println("                Row row = sheet.createRow(rowNum.getAndIncrement());");
+        for (int i = 0; i < sortedColumns.size(); i++) {
+            ColumnDefinition col = sortedColumns.get(i);
+            String getterChain = buildGetterChain(col.fieldName());
+            String type = col.type().name();
+            out.println("                Cell cell" + i + " = row.createCell(" + i + ");");
+            out.println("                Object value" + i + " = " + getterChain + ";");
+            out.println("                if (value" + i + " != null) {");
+            out.println("                    switch (\"" + type + "\") {");
+            out.println("                        case \"STRING\":");
+            out.println("                            cell" + i + ".setCellValue(value" + i + ".toString());");
+            out.println("                            break;");
+            out.println("                        case \"NUMBER\":");
+            out.println("                            cell" + i + ".setCellValue(((Number) value" + i + ").doubleValue());");
+            out.println("                            bodyStyles[" + i + "].setDataFormat(workbook.createDataFormat().getFormat(\"0.00\"));");
+            out.println("                            break;");
+            out.println("                        case \"DATE\":");
+            out.println("                            cell" + i + ".setCellValue(dateFormat.format((Date) value" + i + "));");
+            out.println("                            bodyStyles[" + i + "].setDataFormat(workbook.createDataFormat().getFormat(\"dd/mm/yyyy\"));");
+            out.println("                            break;");
+            out.println("                        case \"BOOLEAN\":");
+            out.println("                            cell" + i + ".setCellValue((Boolean) value" + i + ");");
+            out.println("                            break;");
+            out.println("                        default:");
+            out.println("                            cell" + i + ".setCellValue(value" + i + ".toString());");
+            out.println("                    }");
+            out.println("                } else {");
+            out.println("                    cell" + i + ".setCellValue(\"\");");
+            out.println("                }");
+            out.println("                cell" + i + ".setCellStyle(bodyStyles[" + i + "]);");
+        }
+        out.println("            });");
+//        out.println("        }");
+//        out.println("        int lastDataRow = (dataStream != null && dataStream.count()!=0) ? (int)dataStream.count() - 1 : 1;");
+
+//        writeFormulasStream(out, sortedColumns);
 
         for (int i = 0; i < sortedColumns.size(); i++) {
             out.println("        sheet.trackColumnForAutoSizing(" + i + ");");
@@ -296,6 +375,30 @@ public class ExcelProcessor extends AbstractProcessor {
     private void writeFormulas(PrintWriter out, List<ColumnDefinition> columns) {
         out.println("        int formulaRowNum = lastDataRow + 1;");
         out.println("        if (data != null && !data.isEmpty()) {");
+        for (int i = 0; i < columns.size(); i++) {
+            out.println("            if (!formulas[" + i + "].isEmpty()) {");
+            out.println("                Row formulaRow = sheet.createRow(formulaRowNum);");
+            out.println("                Cell formulaCell = formulaRow.createCell(" + i + ");");
+            out.println("                String formula = \"\";");
+            out.println("                if (formulaApplyTo[" + i + "].equals(\"COLUMN\")) {");
+            out.println("                    String range = getColumnLetter(" + i + ") + \"2:\" + getColumnLetter(" + i + ") + lastDataRow;");
+            out.println("                    formula = formulas[" + i + "] + \"(\" + range + \")\";");
+            out.println("                    formulaCell.setCellFormula(formula);");
+            out.println("                } else if (formulaApplyTo[" + i + "].equals(\"CELL\")) {");
+            out.println("                    int targetRow = formulaRowOffsets[" + i + "] == -1 ? formulaRowNum : formulaRowOffsets[" + i + "];");
+            out.println("                    Row targetFormulaRow = sheet.createRow(targetRow);");
+            out.println("                    formulaCell = targetFormulaRow.createCell(" + i + ");");
+            out.println("                    formula = formulas[" + i + "];");
+            out.println("                    formulaCell.setCellFormula(formula);");
+            out.println("                }");
+            out.println("                formulaCell.setCellStyle(bodyStyles[" + i + "]);");
+            out.println("            }");
+        }
+        out.println("        }");
+    }
+    private void writeFormulasStream(PrintWriter out, List<ColumnDefinition> columns) {
+        out.println("        int formulaRowNum = lastDataRow + 1;");
+        out.println("        if (dataStream != null && dataStream.count() > 0) {");
         for (int i = 0; i < columns.size(); i++) {
             out.println("            if (!formulas[" + i + "].isEmpty()) {");
             out.println("                Row formulaRow = sheet.createRow(formulaRowNum);");
