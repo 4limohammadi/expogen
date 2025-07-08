@@ -3,7 +3,11 @@ package ir.byteplus.expogen;
 import javax.annotation.processing.*;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
+import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -11,18 +15,67 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * An annotation processor that generates Excel exporter classes based on {@link ExportToExcels} annotations.
- * Processes annotated classes at compile time to produce implementations of {@link ExportToExcelService}.
- * Uses {@code SXSSFWorkbook} for memory-efficient Excel generation, suitable for large datasets.
+ * An annotation processor that generates Excel exporter classes based on {@link ExportToExcels}
+ * annotations during compile-time. This processor creates implementations of
+ * {@link ExportToExcelService} for each {@link ExportToExcel} configuration, producing
+ * memory-efficient Excel files using Apache POI's {@code SXSSFWorkbook}. It supports
+ * exporting data from both {@code List} and {@code Stream} sources, with customizable
+ * column definitions, styles, and optional auto-sizing of columns.
+ *
+ * <p>The processor validates the annotated class and its fields, ensuring valid getter methods
+ * exist for each field specified in {@link ColumnDefinition}. It also validates styling
+ * properties (e.g., font size, background color) and generates appropriate code to handle
+ * different data types ({@link ColumnType}).
+ *
+ * <p>Example usage:
+ * <pre>
+ * @ExportToExcels({
+ *     @ExportToExcel(
+ *         className = "UserExporter",
+ *         sheetName = "Users",
+ *         autoSizeColumns = true,
+ *         columns = {
+ *             @ColumnDefinition(
+ *                 fieldName = "name",
+ *                 columnName = "Full Name",
+ *                 type = ColumnType.STRING,
+ *                 order = 1,
+ *                 headerStyle = @ExcelStyle(fontName = "Arial", fontSize = 12, bold = true, backgroundColor = "CCCCCC"),
+ *                 bodyStyle = @ExcelStyle(fontName = "Arial", fontSize = 10)
+ *             ),
+ *             @ColumnDefinition(fieldName = "age", type = ColumnType.NUMBER, order = 2)
+ *         }
+ *     )
+ * })
+ * public class User {
+ *     private String name;
+ *     private int age;
+ *     public String getName() { return name; }
+ *     public int getAge() { return age; }
+ * }
+ * </pre>
+ *
+ * <p>The above example generates a {@code UserExporter} class that exports {@code User}
+ * objects to an Excel file with a "Users" sheet, containing "Full Name" and "age" columns.
+ *
+ * @since 0.1.0
+ * @see ExportToExcels
+ * @see ExportToExcel
+ * @see ColumnDefinition
+ * @see ExportToExcelService
  */
 @SupportedAnnotationTypes("ir.byteplus.expogen.ExportToExcels")
 @SupportedSourceVersion(SourceVersion.RELEASE_8)
 public class ExcelProcessor extends AbstractProcessor {
-    /** Utility for accessing element-related information during annotation processing. */
+
+    /**
+     * Utility for accessing element-related information during annotation processing.
+     */
     private Elements elementUtils;
 
     /**
-     * Initializes the processor with the processing environment.
+     * Initializes the processor with the processing environment, setting up utilities
+     * for element manipulation.
      *
      * @param processingEnv the environment for annotation processing
      */
@@ -33,11 +86,18 @@ public class ExcelProcessor extends AbstractProcessor {
     }
 
     /**
-     * Processes the {@link ExportToExcels} annotations and generates Excel exporter classes.
+     * Processes the {@link ExportToExcels} annotations found in the source code and generates
+     * Excel exporter classes for each {@link ExportToExcel} configuration. This method validates
+     * the annotated classes, ensures valid getter methods, and produces Java source files for
+     * the exporter classes.
+     *
+     * <p>Debug information is printed to the console to aid in troubleshooting during development.
+     * If an error occurs during code generation (e.g., I/O issues), an error message is reported
+     * using the processing environment's messager.
      *
      * @param annotations the set of annotations to process
-     * @param roundEnv the environment for the current round of annotation processing
-     * @return {@code true} to indicate that the annotations have been processed
+     * @param roundEnv    the environment for the current round of annotation processing
+     * @return {@code true} to indicate that the annotations have been claimed and processed
      */
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
@@ -59,7 +119,11 @@ public class ExcelProcessor extends AbstractProcessor {
                     try {
                         generateExcelExporter(classElement, excel);
                     } catch (IOException e) {
-                        e.printStackTrace();
+                        processingEnv.getMessager().printMessage(
+                                Diagnostic.Kind.ERROR,
+                                "Failed to generate Excel exporter: " + e.getMessage(),
+                                classElement
+                        );
                     }
                 }
             }
@@ -68,14 +132,24 @@ public class ExcelProcessor extends AbstractProcessor {
     }
 
     /**
-     * Generates an Excel exporter class for the given annotated class and configuration.
+     * Generates an Excel exporter class based on the provided class element and
+     * {@link ExportToExcel} configuration. The generated class implements
+     * {@link ExportToExcelService} and includes methods to export data from a {@code List}
+     * or {@code Stream}. The class is written to a new Java source file.
+     *
+     * <p>Validates the class name and getter methods for the specified fields. If validation
+     * fails, an error is reported, and no code is generated.
      *
      * @param classElement the annotated class element
-     * @param excel the {@link ExportToExcel} annotation configuration
+     * @param excel        the {@link ExportToExcel} annotation configuration
      * @throws IOException if an I/O error occurs during code generation
      */
     private void generateExcelExporter(TypeElement classElement, ExportToExcel excel) throws IOException {
         String className = excel.className();
+        boolean isAutoSizeColumns = excel.autoSizeColumns();
+        if (!isValidClass(classElement, className)) {
+            return;
+        }
         String sheetName = excel.sheetName().isEmpty() ? classElement.getSimpleName().toString() : excel.sheetName();
         ColumnDefinition[] columns = excel.columns();
         String packageName = elementUtils.getPackageOf(classElement).getQualifiedName().toString();
@@ -85,17 +159,19 @@ public class ExcelProcessor extends AbstractProcessor {
             writePackageAndImports(out, packageName);
             writeClassDeclaration(out, className, classElement);
             writeFields(out);
-            writeExportMethod(out, classElement, sheetName, columns);
-            writeExportMethodFromStream(out, classElement, sheetName, columns);
+            writeExportMethod(out, classElement, sheetName, columns, isAutoSizeColumns);
+            writeExportMethodFromStream(out, classElement, sheetName, columns, isAutoSizeColumns);
             writeHelperMethods(out);
             out.println("}");
         }
     }
 
     /**
-     * Writes the package declaration and import statements to the output.
+     * Writes the package declaration and necessary import statements for the generated
+     * exporter class. Includes imports for Apache POI classes, Java utilities, and the
+     * {@link ExportToExcelService} interface.
      *
-     * @param out the writer for the generated source file
+     * @param out         the writer for the generated source file
      * @param packageName the package name for the generated class
      */
     private void writePackageAndImports(PrintWriter out, String packageName) {
@@ -116,10 +192,11 @@ public class ExcelProcessor extends AbstractProcessor {
     }
 
     /**
-     * Writes the class declaration for the generated exporter class.
+     * Writes the class declaration for the generated exporter class, implementing
+     * {@link ExportToExcelService} with the appropriate generic type.
      *
-     * @param out the writer for the generated source file
-     * @param className the name of the generated class
+     * @param out          the writer for the generated source file
+     * @param className    the name of the generated class
      * @param classElement the annotated class element
      */
     private void writeClassDeclaration(PrintWriter out, String className, TypeElement classElement) {
@@ -127,7 +204,8 @@ public class ExcelProcessor extends AbstractProcessor {
     }
 
     /**
-     * Writes the instance fields for the generated exporter class.
+     * Writes the instance fields for the generated exporter class, including the workbook,
+     * sheet, date format, and style arrays for headers and body cells.
      *
      * @param out the writer for the generated source file
      */
@@ -137,21 +215,25 @@ public class ExcelProcessor extends AbstractProcessor {
         out.println("    private SimpleDateFormat dateFormat;");
         out.println("    private CellStyle[] headerStyles;");
         out.println("    private CellStyle[] bodyStyles;");
-        out.println("    private String[] formulas;");
-        out.println("    private String[] formulaApplyTo;");
-        out.println("    private int[] formulaRowOffsets;");
         out.println();
     }
 
     /**
-     * Writes the export method that generates an Excel workbook from a list of data.
+     * Writes the {@code export} method that generates an Excel workbook from a list of data
+     * objects. The method creates a sheet, applies header and body styles, formats data based
+     * on {@link ColumnType}, and optionally auto-sizes columns if configured.
      *
-     * @param out the writer for the generated source file
-     * @param classElement the annotated class element
-     * @param sheetName the name of the Excel sheet
-     * @param columns the column definitions for the Excel sheet
+     * <p>Validates getter methods for each column and reports errors if any are missing.
+     * If the input list is {@code null} or empty, only the header row is generated.
+     *
+     * @param out            the writer for the generated source file
+     * @param classElement   the annotated class element
+     * @param sheetName      the name of the Excel sheet
+     * @param columns        the column definitions for the Excel sheet
+     * @param isAutoSizeColumns whether to auto-size columns
      */
-    private void writeExportMethod(PrintWriter out, TypeElement classElement, String sheetName, ColumnDefinition[] columns) {
+    private void writeExportMethod(PrintWriter out, TypeElement classElement, String sheetName, ColumnDefinition[] columns,
+                                   boolean isAutoSizeColumns) {
         out.println("    @Override");
         out.println("    public SXSSFWorkbook export(List<" + classElement.getSimpleName() + "> data) {");
         out.println("        workbook = new SXSSFWorkbook(100);");
@@ -162,6 +244,17 @@ public class ExcelProcessor extends AbstractProcessor {
         List<ColumnDefinition> sortedColumns = Arrays.stream(columns)
                 .sorted(Comparator.comparingInt(ColumnDefinition::order))
                 .collect(Collectors.toList());
+
+        for (ColumnDefinition column : sortedColumns) {
+            if (!hasGetter(classElement, column.fieldName())) {
+                processingEnv.getMessager().printMessage(
+                        Diagnostic.Kind.ERROR,
+                        "No valid getter found for field: " + column.fieldName(),
+                        classElement
+                );
+                return;
+            }
+        }
 
         writeStyles(out, sortedColumns);
 
@@ -213,11 +306,11 @@ public class ExcelProcessor extends AbstractProcessor {
         out.println("        }");
         out.println("        int lastDataRow = data != null && !data.isEmpty() ? rowNum - 1 : 1;");
 
-//        writeFormulas(out, sortedColumns);
-
-        for (int i = 0; i < sortedColumns.size(); i++) {
-            out.println("        sheet.trackColumnForAutoSizing(" + i + ");");
-            out.println("        sheet.autoSizeColumn(" + i + ");");
+        if (isAutoSizeColumns) {
+            for (int i = 0; i < sortedColumns.size(); i++) {
+                out.println("        sheet.trackColumnForAutoSizing(" + i + ");");
+                out.println("        sheet.autoSizeColumn(" + i + ");");
+            }
         }
 
         out.println("        return workbook;");
@@ -225,14 +318,21 @@ public class ExcelProcessor extends AbstractProcessor {
     }
 
     /**
-     * Writes the export method that generates an Excel workbook from a stream of data.
+     * Writes the {@code export} method that generates an Excel workbook from a stream of data
+     * objects. The method creates a sheet, applies header and body styles, formats data based
+     * on {@link ColumnType}, and optionally auto-sizes columns if configured. This method is
+     * optimized for large datasets by processing data incrementally.
      *
-     * @param out the writer for the generated source file
-     * @param classElement the annotated class element
-     * @param sheetName the name of the Excel sheet
-     * @param columns the column definitions for the Excel sheet
+     * <p>Validates getter methods for each column and reports errors if any are missing.
+     * If the input stream is {@code null} or empty, only the header row is generated.
+     *
+     * @param out            the writer for the generated source file
+     * @param classElement   the annotated class element
+     * @param sheetName      the name of the Excel sheet
+     * @param columns        the column definitions for the Excel sheet
+     * @param isAutoSizeColumns whether to auto-size columns
      */
-    private void writeExportMethodFromStream(PrintWriter out, TypeElement classElement, String sheetName, ColumnDefinition[] columns) {
+    private void writeExportMethodFromStream(PrintWriter out, TypeElement classElement, String sheetName, ColumnDefinition[] columns, boolean isAutoSizeColumns) {
         out.println("    @Override");
         out.println("    public SXSSFWorkbook export(Stream<" + classElement.getSimpleName() + "> dataStream) {");
         out.println("        workbook = new SXSSFWorkbook(100);");
@@ -243,6 +343,17 @@ public class ExcelProcessor extends AbstractProcessor {
         List<ColumnDefinition> sortedColumns = Arrays.stream(columns)
                 .sorted(Comparator.comparingInt(ColumnDefinition::order))
                 .collect(Collectors.toList());
+
+        for (ColumnDefinition column : sortedColumns) {
+            if (!hasGetter(classElement, column.fieldName())) {
+                processingEnv.getMessager().printMessage(
+                        Diagnostic.Kind.ERROR,
+                        "No valid getter found for field: " + column.fieldName(),
+                        classElement
+                );
+                return;
+            }
+        }
 
         writeStyles(out, sortedColumns);
 
@@ -296,22 +407,22 @@ public class ExcelProcessor extends AbstractProcessor {
         out.println("        }");
         out.println("        int lastDataRow = rowCount[0] > 0 ? (int) rowCount[0] + 1 : 1;");
 
-//        writeFormulas(out, sortedColumns); // Use same formula logic for both List and Stream
-
-        for (int i = 0; i < sortedColumns.size(); i++) {
-            out.println("        sheet.trackColumnForAutoSizing(" + i + ");");
-            out.println("        sheet.autoSizeColumn(" + i + ");");
+        if (isAutoSizeColumns) {
+            for (int i = 0; i < sortedColumns.size(); i++) {
+                out.println("        sheet.trackColumnForAutoSizing(" + i + ");");
+                out.println("        sheet.autoSizeColumn(" + i + ");");
+            }
         }
-
         out.println("        return workbook;");
         out.println("    }");
     }
 
     /**
-     * Builds a safe getter chain for accessing nested fields in the data object.
+     * Builds a null-safe getter chain for accessing nested fields in the data object.
+     * Supports nested fields using dot notation (e.g., "user.address.city").
      *
      * @param fieldName the field name, potentially containing nested fields separated by dots
-     * @return a string representing the safe getter chain
+     * @return a string representing the null-safe getter chain
      */
     private String buildGetterChain(String fieldName) {
         String[] parts = fieldName.split("\\.");
@@ -331,33 +442,33 @@ public class ExcelProcessor extends AbstractProcessor {
     }
 
     /**
-     * Writes the style definitions for headers and body cells.
+     * Writes style definitions for header and body cells based on {@link ExcelStyle}
+     * configurations in the column definitions. Applies font, size, boldness, background
+     * color, and alignment settings.
      *
-     * @param out the writer for the generated source file
+     * @param out     the writer for the generated source file
      * @param columns the list of column definitions
      */
     private void writeStyles(PrintWriter out, List<ColumnDefinition> columns) {
         out.println("        headerStyles = new CellStyle[" + columns.size() + "];");
         out.println("        bodyStyles = new CellStyle[" + columns.size() + "];");
-        out.println("        formulas = new String[" + columns.size() + "];");
-        out.println("        formulaApplyTo = new String[" + columns.size() + "];");
-        out.println("        formulaRowOffsets = new int[" + columns.size() + "];");
 
         for (int i = 0; i < columns.size(); i++) {
             ColumnDefinition col = columns.get(i);
             ExcelStyle headerStyle = col.headerStyle();
             ExcelStyle bodyStyle = col.bodyStyle();
-            ExcelFormula formula = col.formula();
 
             out.println("        headerStyles[" + i + "] = workbook.createCellStyle();");
             out.println("        XSSFFont headerFont" + i + " = (XSSFFont) workbook.createFont();");
             out.println("        headerFont" + i + ".setFontName(\"" + headerStyle.fontName() + "\");");
-            out.println("        headerFont" + i + ".setFontHeightInPoints((short) " + headerStyle.fontSize() + ");");
+            if (isValidFontSize(headerStyle.fontSize())) {
+                out.println("        headerFont" + i + ".setFontHeightInPoints((short) " + headerStyle.fontSize() + ");");
+            }
             if (headerStyle.bold()) {
                 out.println("        headerFont" + i + ".setBold(true);");
             }
             out.println("        headerStyles[" + i + "].setFont(headerFont" + i + ");");
-            if (!headerStyle.backgroundColor().isEmpty()) {
+            if (!headerStyle.backgroundColor().isEmpty() && isValidBackgroundColor(headerStyle.backgroundColor())) {
                 out.println("        headerStyles[" + i + "].setFillForegroundColor(new XSSFColor(new java.awt.Color(0x" + headerStyle.backgroundColor() + "), null));");
                 out.println("        headerStyles[" + i + "].setFillPattern(FillPatternType.SOLID_FOREGROUND);");
             }
@@ -366,62 +477,40 @@ public class ExcelProcessor extends AbstractProcessor {
             out.println("        bodyStyles[" + i + "] = workbook.createCellStyle();");
             out.println("        XSSFFont bodyFont" + i + " = (XSSFFont) workbook.createFont();");
             out.println("        bodyFont" + i + ".setFontName(\"" + bodyStyle.fontName() + "\");");
-            out.println("        bodyFont" + i + ".setFontHeightInPoints((short) " + bodyStyle.fontSize() + ");");
+            if (isValidFontSize(bodyStyle.fontSize())) {
+                out.println("        bodyFont" + i + ".setFontHeightInPoints((short) " + bodyStyle.fontSize() + ");");
+            }
             if (bodyStyle.bold()) {
                 out.println("        bodyFont" + i + ".setBold(true);");
             }
             out.println("        bodyStyles[" + i + "].setFont(bodyFont" + i + ");");
-            if (!bodyStyle.backgroundColor().isEmpty()) {
+            if (!bodyStyle.backgroundColor().isEmpty() && isValidBackgroundColor(bodyStyle.backgroundColor())) {
                 out.println("        bodyStyles[" + i + "].setFillForegroundColor(new XSSFColor(new java.awt.Color(0x" + bodyStyle.backgroundColor() + "), null));");
                 out.println("        bodyStyles[" + i + "].setFillPattern(FillPatternType.SOLID_FOREGROUND);");
             }
             out.println("        bodyStyles[" + i + "].setAlignment(HorizontalAlignment." + bodyStyle.alignment() + ");");
-
-            if (!formula.formula().isEmpty()) {
-                out.println("        formulas[" + i + "] = \"" + formula.formula() + "\";");
-                out.println("        formulaApplyTo[" + i + "] = \"" + formula.applyTo() + "\";");
-                out.println("        formulaRowOffsets[" + i + "] = " + formula.rowOffset() + ";");
-            } else {
-                out.println("        formulas[" + i + "] = \"\";");
-                out.println("        formulaApplyTo[" + i + "] = \"\";");
-                out.println("        formulaRowOffsets[" + i + "] = -1;");
-            }
         }
     }
 
     /**
-     * Writes the formulas for the Excel sheet based on column definitions.
+     * Validates that the provided background color is a valid 6-digit hexadecimal value.
+     * Reports an error via the messager if the color is invalid.
      *
-     * @param out the writer for the generated source file
-     * @param columns the list of column definitions
+     * @param color the hexadecimal color value to validate
+     * @return {@code true} if the color is valid, {@code false} otherwise
      */
-//    private void writeFormulas(PrintWriter out, List<ColumnDefinition> columns) {
-//        out.println("        int formulaRowNum = lastDataRow + 1;");
-//        out.println("        if (lastDataRow > 1) {"); // Only apply formulas if data exists
-//        for (int i = 0; i < columns.size(); i++) {
-//            out.println("            if (!formulas[" + i + "].isEmpty()) {");
-//            out.println("                Row formulaRow = sheet.createRow(formulaRowNum);");
-//            out.println("                Cell formulaCell = formulaRow.createCell(" + i + ");");
-//            out.println("                String formula = \"\";");
-//            out.println("                if (formulaApplyTo[" + i + "].equals(\"COLUMN\")) {");
-//            out.println("                    String range = getColumnLetter(" + i + ") + \"2:\" + getColumnLetter(" + i + ") + lastDataRow;");
-//            out.println("                    formula = formulas[" + i + "] + \"(\" + range + \")\";");
-//            out.println("                    formulaCell.setCellFormula(formula);");
-//            out.println("                } else if (formulaApplyTo[" + i + "].equals(\"CELL\")) {");
-//            out.println("                    int targetRow = formulaRowOffsets[" + i + "] == -1 ? formulaRowNum : formulaRowOffsets[" + i + "];");
-//            out.println("                    Row targetFormulaRow = sheet.createRow(targetRow);");
-//            out.println("                    formulaCell = targetFormulaRow.createCell(" + i + ");");
-//            out.println("                    formula = formulas[" + i + "];");
-//            out.println("                    formulaCell.setCellFormula(formula);");
-//            out.println("                }");
-//            out.println("                formulaCell.setCellStyle(bodyStyles[" + i + "]);");
-//            out.println("            }");
-//        }
-//        out.println("        }");
-//    }
+    private boolean isValidBackgroundColor(String color) {
+        if (!color.matches("[0-9A-Fa-f]{6}")) {
+            processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+                    "Invalid hex color: " + color);
+            return false;
+        }
+        return true;
+    }
 
     /**
-     * Writes helper methods for the generated class, such as column letter conversion.
+     * Writes helper methods for the generated class, including a method to convert
+     * column indices to Excel column letters (e.g., 0 to "A", 1 to "B").
      *
      * @param out the writer for the generated source file
      */
@@ -439,12 +528,93 @@ public class ExcelProcessor extends AbstractProcessor {
     }
 
     /**
-     * Capitalizes the first letter of a string.
+     * Capitalizes the first letter of a string, used for generating getter method names.
      *
      * @param str the input string
      * @return the string with the first letter capitalized
      */
     private String capitalize(String str) {
         return str.substring(0, 1).toUpperCase() + str.substring(1);
+    }
+
+    /**
+     * Checks if the specified field has valid getter methods, including for nested fields
+     * (e.g., "user.address.city"). Reports an error if any getter is missing or invalid.
+     *
+     * @param classElement the class element to check
+     * @param fieldName   the field name, potentially containing nested fields separated by dots
+     * @return {@code true} if all getters exist and are valid, {@code false} otherwise
+     */
+    private boolean hasGetter(TypeElement classElement, String fieldName) {
+        String[] fieldParts = fieldName.split("\\.");
+        TypeElement currentClass = classElement;
+
+        for (String part : fieldParts) {
+            String getterName = "get" + capitalize(part);
+            boolean getterFound = false;
+
+            // Check methods in the class
+            for (Element enclosed : elementUtils.getAllMembers(currentClass)) {
+                if (enclosed.getKind() == ElementKind.METHOD && enclosed.getSimpleName().toString().equals(getterName)) {
+                    ExecutableElement method = (ExecutableElement) enclosed;
+                    if (method.getParameters().isEmpty() && method.getReturnType() != null) {
+                        getterFound = true;
+                        if (!part.equals(fieldParts[fieldParts.length - 1])) {
+                            TypeMirror returnType = method.getReturnType();
+                            if (returnType.getKind() == TypeKind.DECLARED) {
+                                currentClass = (TypeElement) ((DeclaredType) returnType).asElement();
+                            } else {
+                                return false;
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (!getterFound) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Validates that the class name is a valid Java identifier. Reports an error via the
+     * messager if the class name is empty or contains invalid characters.
+     *
+     * @param classElement the class element being processed
+     * @param className    the name of the generated class
+     * @return {@code true} if the class name is valid, {@code false} otherwise
+     */
+    private boolean isValidClass(TypeElement classElement, String className) {
+        if (className.isEmpty() || !className.matches("[A-Za-z][A-Za-z0-9]*")) {
+            processingEnv.getMessager().printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "Invalid className: " + className,
+                    classElement
+            );
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Validates that the font size is positive. Reports an error via the messager if the
+     * font size is invalid (e.g., zero or negative).
+     *
+     * @param fontSize the font size to validate
+     * @return {@code true} if the font size is valid, {@code false} otherwise
+     */
+    private boolean isValidFontSize(int fontSize) {
+        if (fontSize <= 0) {
+            processingEnv.getMessager().printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "Invalid fontSize: " + fontSize
+            );
+            return false;
+        }
+        return true;
     }
 }
