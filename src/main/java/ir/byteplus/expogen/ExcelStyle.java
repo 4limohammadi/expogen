@@ -8,30 +8,28 @@ import java.lang.annotation.Target;
 /**
  * Configures the styling properties for headers or data cells in the generated Excel file.
  * This annotation is used within {@link ColumnDefinition} to customize the appearance of
- * column headers and data cells, including font, size, boldness, background color, and
- * alignment. The styles are applied using Apache POI's {@code CellStyle} and {@code XSSFFont}
- * in the generated exporter class.
+ * column headers and data cells.
  *
- * <p>Example usage within {@link ColumnDefinition}:
- * <pre>
- * @ExportToExcels({
- *     @ExportToExcel(
+ * <p>Example usage:
+ * <pre>{@code
+ * &#064;ExportToExcels({
+ *     &#064;ExportToExcel(
  *         className = "UserExporter",
  *         sheetName = "Users",
  *         columns = {
- *             @ColumnDefinition(
+ *             &#064;ColumnDefinition(
  *                 fieldName = "name",
  *                 columnName = "Full Name",
  *                 type = ColumnType.STRING,
  *                 order = 1,
- *                 headerStyle = @ExcelStyle(
+ *                 headerStyle = &#064;ExcelStyle(
  *                     fontName = "Arial",
  *                     fontSize = 12,
  *                     bold = true,
  *                     backgroundColor = "CCCCCC",
  *                     alignment = "CENTER"
  *                 ),
- *                 bodyStyle = @ExcelStyle(
+ *                 bodyStyle = &#064;ExcelStyle(
  *                     fontName = "Arial",
  *                     fontSize = 10,
  *                     alignment = "LEFT"
@@ -44,13 +42,9 @@ import java.lang.annotation.Target;
  *     private String name;
  *     public String getName() { return name; }
  * }
- * </pre>
+ * }</pre>
  *
- * <p>The above example generates an Excel file with a "Full Name" column where the header
- * has a bold Arial font (12pt) with a gray background and centered alignment, and the data
- * cells have a regular Arial font (10pt) with left alignment.
- *
- * @since 0.1.0
+ * @since 0.0.0.2
  * @see ColumnDefinition
  * @see ExportToExcel
  */

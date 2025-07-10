@@ -6,53 +6,61 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Configures a single column in the generated Excel file, specifying the data source field,
- * display name, styling, data type, and optional formula.
- * This annotation is used within {@link ExportToExcel} to define the structure and formatting
- * of individual columns in the exported Excel file.
+ * Defines a column in the generated Excel file, specifying its field name, display name,
+ * data type, order, and styling. This annotation is used within {@link ExportToExcel}
+ * to configure columns for the Excel exporter.
  *
- * <p>The {@code fieldName} must correspond to a valid field in the annotated class, with
- * appropriate getter methods. Nested fields (e.g., "user.address.city") are supported,
- * provided valid getters exist for each segment. If the field or its getters are invalid,
- * a compilation error will be raised during annotation processing.
+ * <p>Example usage:</p>
+ * <pre>{@code
  *
- * <p>Example usage:
- * <pre>
- * @ExportToExcels({
- *     @ExportToExcel(
- *         className = "UserExporter",
- *         sheetName = "Users",
- *         autoSizeColumns = true,
- *         columns = {
- *             @ColumnDefinition(
- *                 fieldName = "name",
- *                 columnName = "Full Name",
- *                 type = ColumnType.STRING,
- *                 order = 1,
- *                 headerStyle = @ExcelStyle(fontName = "Arial", fontSize = 12, bold = true, backgroundColor = "CCCCCC"),
- *                 bodyStyle = @ExcelStyle(fontName = "Arial", fontSize = 10)
- *             ),
- *             @ColumnDefinition(
- *                 fieldName = "age",
- *                 type = ColumnType.NUMBER,
- *                 order = 2,
- *                 headerStyle = @ExcelStyle(fontName = "Arial", fontSize = 12, bold = true)
- *             )
- *         }
- *     )
+ *
+ * &#064;ExportToExcels({
+ *       &#064;ExportToExcel(
+ *               className = "UserExporter",
+ *               sheetName = "Users",
+ *               columns = {
+ *                       &#064;ColumnDefinition(
+ *                               fieldName = "name",
+ *                               columnName = "Full Name",
+ *                               type = ColumnType.STRING,
+ *                               order = 1,
+ *                               headerStyle = &#064;ExcelStyle(
+ *                                       fontName = "Arial",
+ *                                       fontSize = 12,
+ *                                       bold = true,
+ *                                       backgroundColor = "CCCCCC",
+ *                                       alignment = "CENTER"
+ *                               ),
+ *                               bodyStyle = &#064;ExcelStyle(
+ *                                       fontName = "Arial",
+ *                                       fontSize = 10,
+ *                                       alignment = "LEFT"
+ *                               )
+ *                       ),
+ *                       &#064;ColumnDefinition(
+ *                          fieldName = "age",
+ *                          type = ColumnType.NUMBER,
+ *                          order = 2)
+ *               }
+ *       )
  * })
  * public class User {
- *     private String name;
- *     private int age;
- *     public String getName() { return name; }
- *     public int getAge() { return age; }
+ *  private String name;
+ *   private int age;
+ *   public String getName() {
+ *       return name;
+ *   }
+ *   public int getAge() {
+ *       return age;
+ *   }
  * }
- * </pre>
+ * }</pre>
  *
- * <p>The above example generates an Excel file with two columns: "Full Name" (string) and "age" (number),
- * with specified header and body styles, sorted by the {@code order} value.
- *
- * @since 0.1.0
+ * @see ExportToExcels
+ * @see ExportToExcel
+ * @see ColumnType
+ * @see ExcelStyle
+ * @since 0.0.0.2
  */
 @Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.ANNOTATION_TYPE)

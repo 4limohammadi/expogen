@@ -18,32 +18,25 @@ import java.util.stream.Collectors;
  * An annotation processor that generates Excel exporter classes based on {@link ExportToExcels}
  * annotations during compile-time. This processor creates implementations of
  * {@link ExportToExcelService} for each {@link ExportToExcel} configuration, producing
- * memory-efficient Excel files using Apache POI's {@code SXSSFWorkbook}. It supports
- * exporting data from both {@code List} and {@code Stream} sources, with customizable
- * column definitions, styles, and optional auto-sizing of columns.
- *
- * <p>The processor validates the annotated class and its fields, ensuring valid getter methods
- * exist for each field specified in {@link ColumnDefinition}. It also validates styling
- * properties (e.g., font size, background color) and generates appropriate code to handle
- * different data types ({@link ColumnType}).
+ * memory-efficient Excel files using Apache POI's {@code SXSSFWorkbook}.
  *
  * <p>Example usage:
- * <pre>
- * @ExportToExcels({
- *     @ExportToExcel(
+ * <pre>{@code
+ * &#064;ExportToExcels({
+ *     &#064;ExportToExcel(
  *         className = "UserExporter",
  *         sheetName = "Users",
  *         autoSizeColumns = true,
  *         columns = {
- *             @ColumnDefinition(
+ *             &#064;ColumnDefinition(
  *                 fieldName = "name",
  *                 columnName = "Full Name",
  *                 type = ColumnType.STRING,
  *                 order = 1,
- *                 headerStyle = @ExcelStyle(fontName = "Arial", fontSize = 12, bold = true, backgroundColor = "CCCCCC"),
- *                 bodyStyle = @ExcelStyle(fontName = "Arial", fontSize = 10)
+ *                 headerStyle = &#064;ExcelStyle(fontName = "Arial", fontSize = 12, bold = true, backgroundColor = "CCCCCC"),
+ *                 bodyStyle = &#064;ExcelStyle(fontName = "Arial", fontSize = 10)
  *             ),
- *             @ColumnDefinition(fieldName = "age", type = ColumnType.NUMBER, order = 2)
+ *             &#064;ColumnDefinition(fieldName = "age", type = ColumnType.NUMBER, order = 2)
  *         }
  *     )
  * })
@@ -53,12 +46,9 @@ import java.util.stream.Collectors;
  *     public String getName() { return name; }
  *     public int getAge() { return age; }
  * }
- * </pre>
+ * }</pre>
  *
- * <p>The above example generates a {@code UserExporter} class that exports {@code User}
- * objects to an Excel file with a "Users" sheet, containing "Full Name" and "age" columns.
- *
- * @since 0.1.0
+ * @since 0.0.0.2
  * @see ExportToExcels
  * @see ExportToExcel
  * @see ColumnDefinition

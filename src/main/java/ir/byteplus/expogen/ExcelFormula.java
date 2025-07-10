@@ -1,7 +1,5 @@
 package ir.byteplus.expogen;
 
-import javax.lang.model.element.TypeElement;
-import java.io.PrintWriter;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;

@@ -8,31 +8,25 @@ import java.util.stream.Stream;
 /**
  * Defines the contract for classes that export data to an Excel file using Apache POI's
  * {@code SXSSFWorkbook}. This interface is implemented by classes generated through the
- * {@link ExportToExcels} and {@link ExportToExcel} annotations during annotation processing.
- * It supports exporting data from both {@code List} and {@code Stream} sources, enabling
- * memory-efficient handling of large datasets.
- *
- * <p>The generated exporter classes create an Excel file with a configured sheet name,
- * columns, and styles as specified in the annotations. The {@code SXSSFWorkbook} ensures
- * efficient memory usage by streaming data to disk, making it suitable for large-scale exports.
+ * {@link ExportToExcels} and {@link ExportToExcel} annotations.
  *
  * <p>Example usage with a generated exporter:
- * <pre>
- * @ExportToExcels({
- *     @ExportToExcel(
+ * <pre>{@code
+ * &#064;ExportToExcels({
+ *     &#064;ExportToExcel(
  *         className = "UserExporter",
  *         sheetName = "Users",
  *         autoSizeColumns = true,
  *         columns = {
- *             @ColumnDefinition(
+ *             &#064;ColumnDefinition(
  *                 fieldName = "name",
  *                 columnName = "Full Name",
  *                 type = ColumnType.STRING,
  *                 order = 1,
- *                 headerStyle = @ExcelStyle(fontName = "Arial", fontSize = 12, bold = true, backgroundColor = "CCCCCC"),
- *                 bodyStyle = @ExcelStyle(fontName = "Arial", fontSize = 10)
+ *                 headerStyle = &#064;ExcelStyle(fontName = "Arial", fontSize = 12, bold = true, backgroundColor = "CCCCCC"),
+ *                 bodyStyle = &#064;ExcelStyle(fontName = "Arial", fontSize = 10)
  *             ),
- *             @ColumnDefinition(fieldName = "age", type = ColumnType.NUMBER, order = 2)
+ *             &#064;ColumnDefinition(fieldName = "age", type = ColumnType.NUMBER, order = 2)
  *         }
  *     )
  * })
@@ -47,14 +41,13 @@ import java.util.stream.Stream;
  * UserExporter exporter = new UserExporter();
  * List<User> users = Arrays.asList(new User("Alice", 30), new User("Bob", 25));
  * SXSSFWorkbook workbook = exporter.export(users);
- * // Save workbook to file
  * try (FileOutputStream out = new FileOutputStream("users.xlsx")) {
  *     workbook.write(out);
  * }
- * </pre>
+ * }</pre>
  *
  * @param <T> the type of the data objects to export
- * @since 0.1.0
+ * @since 0.0.0.2
  * @see ExportToExcels
  * @see ExportToExcel
  * @see ColumnDefinition
