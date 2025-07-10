@@ -27,14 +27,14 @@ Add Expogen as a dependency in your Maven or Gradle project. The required Apache
 <dependency>
     <groupId>ir.byteplus</groupId>
     <artifactId>expogen</artifactId>
-    <version>0.0.0.2</version>
+    <version>0.0.1.2</version>
 </dependency>
 ```
 
 ### Gradle
 
 ```groovy
-implementation 'ir.byteplus:expogen:0.0.0.2'
+implementation 'ir.byteplus:expogen:0.0.1.2'
 ```
 
 Expogen includes the following Apache POI dependencies:
