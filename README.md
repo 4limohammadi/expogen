@@ -251,4 +251,4 @@ Expogen is licensed under the MIT License. See the [LICENSE](LICENSE) file for d
 
 ## Contact
 
-For issues or feature requests, please open an issue on the [GitHub repository](https://github.com/byteplus/expogen).
+For issues or feature requests, please open an issue on the [GitHub repository](https://github.com/4limohammadi/expogen/issues).
