@@ -37,7 +37,7 @@ Add Expogen to your pom.xml with the provided scope, as it’s only needed at co
 <dependency>
     <groupId>ir.byteplus</groupId>
     <artifactId>expogen</artifactId>
-    <version>0.0.0.2</version>
+    <version>0.0.1.2</version>
     <scope>provided</scope>
 </dependency>
 ```
@@ -66,8 +66,8 @@ Configure the maven-compiler-plugin to enable annotation processing:
 Add Expogen as both an implementation (for runtime) and annotationProcessor (for compile-time) dependency:
 ```groovy
 dependencies {
-implementation 'ir.byteplus:expogen:0.0.0.2'
-annotationProcessor 'ir.byteplus:expogen:0.0.0.2'
+implementation 'ir.byteplus:expogen:0.0.1.2'
+annotationProcessor 'ir.byteplus:expogen:0.0.1.2'
 }
 ```
 ### Enabling Annotation Processing
