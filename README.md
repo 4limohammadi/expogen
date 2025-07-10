@@ -19,23 +19,71 @@ Expogen is a Java annotation processor that generates memory-efficient Excel exp
 
 ## Installation
 
-Add Expogen as a dependency in your Maven or Gradle project. The required Apache POI dependencies are included transitively.
+### Prerequisites:
+
+
+
+
+
+- Java 8 or higher
+
+
+
+- Maven or Gradle for dependency management
+
+
+
+- An IDE (e.g., IntelliJ IDEA, Eclipse) or command-line build tool
 
 ### Maven
 
+Add Expogen to your pom.xml with the provided scope, as it’s only needed at compile-time. Apache POI dependencies are included transitively.
 ```xml
 <dependency>
     <groupId>ir.byteplus</groupId>
     <artifactId>expogen</artifactId>
-    <version>0.0.1.2</version>
+    <version>0.0.0.2</version>
+    <scope>provided</scope>
 </dependency>
 ```
-
+Configure the maven-compiler-plugin to enable annotation processing:
+```xml
+<build>
+    <plugins>
+        <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <version>3.8.1</version>
+            <configuration>
+                <source>8</source>
+                <target>8</target>
+                <encoding>UTF-8</encoding>
+                <annotationProcessors>
+                    <annotationProcessor>ir.byteplus.expogen.ExcelProcessor</annotationProcessor>
+                </annotationProcessors>
+            </configuration>
+        </plugin>
+    </plugins>
+</build>
+```
 ### Gradle
 
+Add Expogen as both an implementation (for runtime) and annotationProcessor (for compile-time) dependency:
 ```groovy
-implementation 'ir.byteplus:expogen:0.0.1.2'
+dependencies {
+implementation 'ir.byteplus:expogen:0.0.0.2'
+annotationProcessor 'ir.byteplus:expogen:0.0.0.2'
+}
 ```
+### Enabling Annotation Processing
+
+Expogen relies on Java’s annotation processing to generate exporter classes during compilation. Maven and Gradle handle this automatically when configured as above. If using an IDE, you may need to enable annotation processing:
+
+IntelliJ IDEA: Go to File > Settings > Build, Execution, Deployment > Compiler > Annotation Processors and enable “Annotation Processing.”
+Eclipse: Enable annotation processing under Project > Properties > Java Compiler > Annotation Processing.
+
+Verify the setup by compiling your project (mvn compile or gradle build). Expogen’s ExcelProcessor will generate exporter classes in the target (Maven) or build (Gradle) directory.
+
 
 Expogen includes the following Apache POI dependencies:
 - `org.apache.poi:poi:5.2.3`
