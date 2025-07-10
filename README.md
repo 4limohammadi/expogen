@@ -11,11 +11,6 @@ Expogen is a Java annotation processor that generates memory-efficient Excel exp
 - **Multiple Exporters**: Generate multiple exporter classes for a single data class with different configurations.
 - **Compile-Time Validation**: Ensures valid getter methods, class names, and styling properties, reporting errors during compilation.
 
-## Prerequisites
-
-- Java 8 or higher
-- Apache Maven or Gradle for dependency management
-- Apache POI (automatically included as transitive dependencies)
 
 ## Installation
 
